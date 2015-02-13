@@ -6,11 +6,15 @@ class Layer():
 		"""Vectorized implemenation of a layer"""
 		self.units = units #number of units		
 		self.activation_function = activation_function #should act on a numpy vector and return one
-
+		
 	def calculate_activations(self, prev_activation, weight_matrix):
 		"""returns activations as a vector"""
 		summed_input = np.dot(weight_matrix, prev_activation)
 		return self.activation_function.evaluate_func(summed_input)
+
+	def calc_deriv_activation(self, past_activation):
+		"""calculate the derivative of the activation for this layer"""
+		return self.activation_function.eval_deriv_func(past_activation)
 
 class Network():
 	def __init__(self, num_units, act_list):
@@ -39,16 +43,38 @@ class Network():
 		"""initialize neuron outputs from prev forward prop run, starts everything
 		including the biases as ones"""
 		self.neuron_outputs = []
-		for i in range(len(self.layer_list)+1):
+		for i in range(len(self.layer_list)):
 			self.neuron_outputs.append(np.ones((self.num_units[i]+1, 1))) #for the bias unit
+		self.neuron_outputs.append(np.ones(self.num_units[-1],1)) #last one doesn't have bias unit
 		print self.neuron_outputs
 	
+	def _init_output_error(self):
+		self.output_error = []
+		for i in range(1,len(self.layer_list)):
+			self.output_error.append(np.ones((self.num_units[i]+1, 1))) 
+		self.output_error.append(np.ones(self.num_units[-1],1))
+		
+		
 	def forward_prop(self, inputs):
 		"""run forward prop"""
 		assert len(inputs) == self.num_units[0]
 		self.neuron_outputs[0][:-1] = np.expand_dims(inputs, 1) #preserves bias as -1
 		for i in range(1,len(self.layer_list)+1):
 			self.neuron_outputs[i][:-1] = self.layer_list[i-1].calculate_activations(self.neuron_outputs[i-1], self.weight_matrices[i-1])
+
+	def back_prop(self, y):
+		"""run back prop"""
+		self._calc_error(y)
+
+
+	def _calc_error(self, y):
+		"""calcs error func wrt y for some output layer outputs"""
+		 self.output_error[-1] = self.neuron_outputs[-1] - y #replace with proper error func
+		 for i in range(len(self.layer_list)-2,0,-1): #not the input layer bc range is right exclusive
+		 	a = np.dot(np.transpose(self.weight_matrices[i]),self.output_error[i+1])
+		 	b = self.layer_list[i].calc_deriv_activation(self.neuron_outputs[i])
+		 	self.output_error[i] = np.multipy(a,b)
+
 
 def initialize_sigmoid_network(num_units):
 	"""initialize network with all sigmoid activation functions"""

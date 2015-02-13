@@ -45,7 +45,6 @@ class Layer():
 			self.activation_errors = np.multipy(a,b)
 		return self.activation_errors
 
-
 class Network():
 	def __init__(self, num_units, act_list):
 		self.num_units = num_units
@@ -55,6 +54,7 @@ class Network():
 			self.layer_list.append(Layer(num, act))		
 		self.layer_list.append(Layer(num_units[-1], act_list[-1], is_last_layer = True))
 		self._init_weights_as_one()
+		self._init_accumulators()
 		
 	def _init_weights(self):
 		"""initialize network weights in each layer"""
@@ -67,7 +67,13 @@ class Network():
 		self.weight_matrices = []
 		for i in range(len(self.layer_list)-1):
 			self.weight_matrices.append(np.ones((self.num_units[i+1], self.num_units[i]+1)))
-		
+	
+	def _init_accumulators(self):
+		"""initialize network weights in each layer"""
+		self.accumulators = []
+		for i in range(len(self.layer_list)-1):
+			self.accumulators.append(np.zeros(self.num_units[i+1], self.num_units[i]+1)) #succeeding layer, current layer with the bias
+
 	def forward_prop(self, inputs):
 		"""run forward prop"""
 		assert len(inputs) == self.num_units[0]

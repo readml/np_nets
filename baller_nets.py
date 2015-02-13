@@ -35,6 +35,16 @@ class Layer():
 		"""calculate the derivative of the activation for this layer"""
 		return self.activation_function.eval_deriv_func(self.activations)
 
+	def calc_error(self, next_layer_acts, weight_matrix):
+		"""look at the next layer or outputs to calc the error of the activations"""
+		if self.is_last_layer:
+			self.activation_errors = self.activations - next_layer_acts #should be replaced with proper error func
+		else:
+			a = np.dot(np.transpose(self.weight_matrix),next_layer_acts)
+			b = self.calc_deriv_activation(self.activations)
+			self.activation_errors = np.multipy(a,b)
+		return self.activation_errors
+
 
 class Network():
 	def __init__(self, num_units, act_list):
@@ -71,13 +81,10 @@ class Network():
 
 
 	def _calc_error(self, y):
-		"""calcs error func wrt y for some output layer outputs"""
-		self.output_error[-1] = self.neuron_outputs[-1] - y #replace with proper error func
+		"""calcs error func wrt y and next layer for all layers"""
+		self.layer_list[-1].calc_error(y, weight_matrix = None)
 		for i in range(len(self.layer_list)-2,0,-1): #not the input layer bc range is right exclusive
-		 	a = np.dot(np.transpose(self.weight_matrices[i]),self.output_error[i+1])
-		 	b = self.layer_list[i].calc_deriv_activation(self.neuron_outputs[i])
-		 	self.output_error[i] = np.multipy(a,b)
-
+			self.layer_list[i].calc_error(self.layer_list[i+1].activations, weight_matrices[i])
 
 def initialize_sigmoid_network(num_units):
 	"""initialize network with all sigmoid activation functions"""

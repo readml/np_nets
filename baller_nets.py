@@ -42,9 +42,9 @@ class Layer():
 		if self.is_last_layer:
 			self.activation_errors = self.activations - next_layer_acts #should be replaced with proper error func
 		else:
-			a = np.dot(np.transpose(self.weight_matrix),next_layer_acts)
-			b = self.calc_deriv_activation(self.activations)
-			self.activation_errors = np.multipy(a,b)
+			a = np.dot(np.transpose(weight_matrix),next_layer_acts)
+			b = self.calc_deriv_activation()
+			self.activation_errors = np.multiply(a,b)
 		return self.activation_errors
 
 class Network():
@@ -98,22 +98,24 @@ class Network():
 
 	def train_net(self, X, Y):
 		"""np matrix X of input data and np matrix Y of output data, rows are samples, columns are features"""
+		self.X = X
+		self.Y = Y
 		self._init_weights_random
 		init_weights_vector = self._unroll_matrices(self.weight_matrices)
+		solution = fmin_cg(self.evaluate_cost, init_weights_vector, 
+				fprime = self.calc_error_derivs, maxiter = 400)
 
-		solution = op.fmin_cg(self.evaluate_cost, init_weights_vector, 
-				fprime = self.calc_error_derivs,maxiter = 400)
-
-
-	def calc_error_derivs(self, X, Y, weight_matrices):
+	def calc_error_derivs(self, weights_vector):
 		"""find the dCost/dweights"""
+		X = self.X
+		Y = self.Y
 		lam = self.lam
-		self.weight_matrices = weight_matrices
+		self.weight_matrices = self._reform_matrices(weights_vector)
 		self._init_zero_accumulators() #set them to zero
 		samples = X.shape[0]
 		for i in range(samples):
-			forward_prop(X[i,:])
-			back_prop(Y[i,:])
+			self.forward_prop(X[i,:])
+			self.back_prop(Y[i,:])
 
 		# error_derivs is the list of matrix derivatives of cost fcn wrt the weight matrices
 		error_derivs = []
@@ -121,15 +123,21 @@ class Network():
 			error_derivs.append(lam*W) # the regularization
 
 		for i in range(len(error_derivs)):
+			print error_derivs[i]
+			print error_derivs[i].shape[0]
+			print error_derivs[i][:,-1]
+			
 			error_derivs[i][:,-1] = np.zeros((error_derivs[i].shape[0],1))
 			error_derivs[i] += self.accumulators[i]/float(samples)
 
-		return error_derivs
+		return self._unroll_matrices(error_derivs)
 
-	def evaluate_cost(self, X, Y, weight_matrices):
+	def evaluate_cost(self, weights_vector):
 		"""Evaluate prediction cost, need to pass into weight matrices for the gradient descent code"""
+		X = self.X
+		Y = self.Y
 		lam = self.lam
-		self.weight_matrices = weight_matrices
+		self.weight_matrices = self._reform_matrices(weights_vector)
 		samples = X.shape[0]
 
 		total_log_cost = 0
@@ -152,19 +160,34 @@ class Network():
 		assert len(inputs) == self.num_units[0]
 		self.layer_list[0].activations[:-1] = np.expand_dims(inputs, 1) #preserves bias as -1	
 		for i in range(1,len(self.layer_list)):
-			self.layer_list[i].calculate_activations(self.layer_list[i-1].activations, self.weight_matrices[i-1])			
+			self.layer_list[i].calculate_activations(self.layer_list[i-1].activations, 
+				self.weight_matrices[i-1])			
 
 	def back_prop(self, y):
 		"""run back prop"""
 		self._calc_error(y)
-		for i in range(len(self.accumulators)):
-			self.accumulators[i] += np.dot(self.layer_list[i+1].activation_errors, np.transpose(self.layer_list[i].activations))
+		for i in range(len(self.accumulators)-1):
+			"""print self.accumulators[i]
+			print self.layer_list[i+1].activation_errors[:-1]
+			print np.transpose(self.layer_list[i].activations)
+			print np.dot(self.layer_list[i+1].activation_errors[:-1], 
+				np.transpose(self.layer_list[i].activations))"""
+			self.accumulators[i] += np.dot(self.layer_list[i+1].activation_errors[:-1], 
+				np.transpose(self.layer_list[i].activations))
+		index = len(self.accumulators)-1
+		"""print self.accumulators[index]
+		print self.layer_list[index].activation_errors
+		print np.transpose(self.layer_list[index+1].activations)
+		print np.dot(self.layer_list[index+1].activation_errors, 
+			np.transpose(self.layer_list[index].activations))"""
+		self.accumulators[index] += np.dot(self.layer_list[index+1].activation_errors, 
+				np.transpose(self.layer_list[index].activations))
 
 	def _calc_error(self, y):
 		"""calcs error func wrt y and next layer for all layers"""
 		self.layer_list[-1].calc_error(y, weight_matrix = None)
 		for i in range(len(self.layer_list)-2,0,-1): #not the input layer bc range is right exclusive
-			self.layer_list[i].calc_error(self.layer_list[i+1].activations, weight_matrices[i])
+			self.layer_list[i].calc_error(self.layer_list[i+1].activations, self.weight_matrices[i])
 
 def initialize_sigmoid_network(num_units):
 	"""initialize network with all sigmoid activation functions"""
@@ -175,6 +198,10 @@ if __name__ == '__main__':
 		
 	#print [act_funcs.Sigmoid()]*(len(num_units)-1)
 	net = initialize_sigmoid_network([3,2,1])
+	X  = np.array([[3,4,5]])
+	Y = np.array([[1]])
+
+	net.train_net(X,Y)
 	
 	#print net.weight_matrices
 	

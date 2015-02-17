@@ -1,5 +1,7 @@
 import numpy as np
 import baller_act_fcns as act_funcs
+from scipy.optimize import fmin_cg
+
 
 class Layer():
 	def __init__(self, units, activation_function, is_last_layer = False):
@@ -46,21 +48,22 @@ class Layer():
 		return self.activation_errors
 
 class Network():
-	def __init__(self, num_units, act_list):
+	def __init__(self, num_units, act_list, lam):
 		self.num_units = num_units
 		self.act_list = act_list
 		self.layer_list = []
+		self.lam = lam
 		for num, act in zip(self.num_units[:-1], self.act_list[:-1]):
 			self.layer_list.append(Layer(num, act))		
 		self.layer_list.append(Layer(num_units[-1], act_list[-1], is_last_layer = True))
 		self._init_weights_as_one()
-		self._init_accumulators()
-		
+		self._init_zero_accumulators() #set them to zero
+
 	def _init_weights(self):
 		"""initialize network weights in each layer"""
 		self.weight_matrices = []
 		for i in range(len(self.layer_list)-1):
-			self.weight_matrices.append(np.random.rand(self.num_units[i+1], self.num_units[i]+1)) #succeeding layer, current layer with the bias
+			self.weight_matrices.append(np.random.rand((self.num_units[i+1], self.num_units[i]+1))) #succeeding layer, current layer with the bias
 
 	def _init_weights_as_one(self):
 		"""initialize network weights in each layer"""
@@ -68,11 +71,54 @@ class Network():
 		for i in range(len(self.layer_list)-1):
 			self.weight_matrices.append(np.ones((self.num_units[i+1], self.num_units[i]+1)))
 	
-	def _init_accumulators(self):
+	def _init_zero_accumulators(self):
 		"""initialize network weights in each layer"""
 		self.accumulators = []
 		for i in range(len(self.layer_list)-1):
-			self.accumulators.append(np.zeros(self.num_units[i+1], self.num_units[i]+1)) #succeeding layer, current layer with the bias
+			self.accumulators.append(np.zeros((self.num_units[i+1], self.num_units[i]+1))) #succeeding layer, current layer with the bias
+
+	def train_net(self, X, Y):
+		"""np matrix X of input data and np matrix Y of output data, rows are samples, columns are features"""
+		calc_weight_updates(X, Y)
+
+	def calc_error_derivs(self, X, Y, weight_matrices):
+		"""find the dCost/dweights"""
+		lam = self.lam
+		self.weight_matrices = weight_matrices
+		self._init_zero_accumulators() #set them to zero
+		samples = X.shape[0]
+		for i in range(samples):
+			forward_prop(X[i,:])
+			back_prop(Y[i,:])
+
+		# error_derivs is the list of matrix derivatives of cost fcn wrt the weight matrices
+		error_derivs = []
+		for W in self.weight_matrices:
+			error_derivs.append(lam*W) # the regularization
+
+		for i in range(len(error_derivs)):
+			error_derivs[i][:,-1] = np.zeros((error_derivs[i].shape[0],1))
+			error_derivs[i] += self.accumulators[i]/float(samples)
+
+		return error_derivs
+
+	def evaluate_cost(self, X, Y, weight_matrices):
+		"""Evaluate prediction cost, need to pass into weight matrices for the gradient descent code"""
+		lam = self.lam
+		self.weight_matrices = weight_matrices
+		samples = X.shape[0]
+		total_log_cost = 0
+		for i in range(samples):
+			forward_prop(X[i,:])
+			hypothesis = self.layer_list[-1].activations 
+			y = Y[i,:]
+			log_cost = y*np.log(hypothesis) + (np.ones(y.shape) - y)*np.log(np.ones(hypothesis.shape) - hypothesis)
+			total_log_cost += np.sum(log_cost)
+		squared_weights = 0
+		for i in range(len(self.weight_matrices)):
+			squared_weights += np.sum((self.weight_matrices[i][:,-1])**2) # don't regularize bias weights
+		reg_term = lam*1.0/(2*samples)*squared_weights
+		return -1.0/samples*total_log_cost + reg_term 		
 
 	def forward_prop(self, inputs):
 		"""run forward prop"""
@@ -84,7 +130,8 @@ class Network():
 	def back_prop(self, y):
 		"""run back prop"""
 		self._calc_error(y)
-
+		for i in range(len(self.accumulators)):
+			self.accumulators[i] += np.dot(self.layer_list[i+1].activation_errors, np.transpose(self.layer_list[i].activations))
 
 	def _calc_error(self, y):
 		"""calcs error func wrt y and next layer for all layers"""

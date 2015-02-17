@@ -42,15 +42,15 @@ class Layer():
 		if self.is_last_layer:
 			self.activation_errors = self.activations - next_layer_acts_errors #should be replaced with proper error func
 		else:
-			print weight_matrix
-			print next_layer_acts_errors
+		#	print weight_matrix
+		#	print next_layer_acts_errors
 			if not(next_is_last):
 				next_layer_acts_errors = next_layer_acts_errors[:-1] #to get rid of the bias term
 			a = np.dot(np.transpose(weight_matrix),next_layer_acts_errors)
 			b = self.calc_deriv_activation()
 			self.activation_errors = np.multiply(a,b)
-			print self.activation_errors
-			print "then"
+		#	print self.activation_errors
+		#	print "then"
 
 		return self.activation_errors
 
@@ -71,7 +71,7 @@ class Network():
 		self.weight_matrices = []
 		self.shapes_list = []
 		for i in range(len(self.layer_list)-1):			
-			self.weight_matrices.append(np.random.rand(self.num_units[i+1], self.num_units[i]+1)) #succeeding layer, current layer with the bias
+			self.weight_matrices.append(np.random.randn(self.num_units[i+1], self.num_units[i]+1)) #succeeding layer, current layer with the bias
 			self.shapes_list.append(np.shape(self.weight_matrices[i]))
 
 	def _init_weights_as_one(self):
@@ -207,20 +207,20 @@ if __name__ == '__main__':
 	net = initialize_sigmoid_network([3,2,2,1])
 	X  = np.array([[1,3,4],[6,1,-1],[1,3,4],[6,1,-1]])
 	Y = np.array([[1],[0],[1],[0]])
+	#print net.weight_matrices
+	#print net.predict(X,net.weight_matrices)
 	w = net.train_net(X,Y)
-	X2 = np.array([[0,0,0],[1,1,2]])
-	print w 
+	#print "updated weights:"
+	#print w 
 	print net.predict(X,w)
-	# with few samples, performance seems highly dependent on random initialization
 
+	#X2 = np.array([[0,0,0],[1,1,2]])
+	
+	# with few samples, performance seems highly dependent on random initialization
+	
 	"""X3 = np.array([[1,3,4],[6,1,-1]])
 	Y3 = np.array([[1],[0]])
 	w3 = net.train_net(X3, Y3)
 	print net.predict(X3, w3)"""
-	
-		#print net.__dict__
-
-	print "hello"	
-
-
-
+	#print net.__dict__
+	print "hello"

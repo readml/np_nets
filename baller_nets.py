@@ -104,6 +104,19 @@ class Network():
 		init_weights_vector = self._unroll_matrices(self.weight_matrices)
 		solution = fmin_cg(self.evaluate_cost, init_weights_vector, 
 				fprime = self.calc_error_derivs, maxiter = 400)
+		return solution
+
+	def predict(self, X, weights_vector):
+		self.X = X
+		self.weight_matrices = self._reform_matrices(weights_vector)
+		
+		samples = X.shape[0]
+		Y = np.zeros((samples, len(self.layer_list[-1].activations)))
+		for i in range(samples):
+			self.forward_prop(X[i,:])
+			Y[i] = self.layer_list[-1].activations
+
+		return Y
 
 	def calc_error_derivs(self, weights_vector):
 		"""find the dCost/dweights"""
@@ -123,11 +136,7 @@ class Network():
 			error_derivs.append(lam*W) # the regularization
 
 		for i in range(len(error_derivs)):
-			print error_derivs[i]
-			print error_derivs[i].shape[0]
-			print error_derivs[i][:,-1]
-			
-			error_derivs[i][:,-1] = np.zeros((error_derivs[i].shape[0],1))
+			error_derivs[i][:,-1] = np.zeros((error_derivs[i].shape[0],))
 			error_derivs[i] += self.accumulators[i]/float(samples)
 
 		return self._unroll_matrices(error_derivs)
@@ -142,7 +151,7 @@ class Network():
 
 		total_log_cost = 0
 		for i in range(samples):
-			forward_prop(X[i,:])
+			self.forward_prop(X[i,:])
 			hypothesis = self.layer_list[-1].activations 
 			y = Y[i,:]
 			log_cost = y*np.log(hypothesis) + (np.ones(y.shape) - y)*np.log(np.ones(hypothesis.shape) - hypothesis)
@@ -167,21 +176,11 @@ class Network():
 		"""run back prop"""
 		self._calc_error(y)
 		for i in range(len(self.accumulators)-1):
-			"""print self.accumulators[i]
-			print self.layer_list[i+1].activation_errors[:-1]
-			print np.transpose(self.layer_list[i].activations)
-			print np.dot(self.layer_list[i+1].activation_errors[:-1], 
-				np.transpose(self.layer_list[i].activations))"""
 			self.accumulators[i] += np.dot(self.layer_list[i+1].activation_errors[:-1], 
 				np.transpose(self.layer_list[i].activations))
 		index = len(self.accumulators)-1
-		"""print self.accumulators[index]
-		print self.layer_list[index].activation_errors
-		print np.transpose(self.layer_list[index+1].activations)
-		print np.dot(self.layer_list[index+1].activation_errors, 
-			np.transpose(self.layer_list[index].activations))"""
 		self.accumulators[index] += np.dot(self.layer_list[index+1].activation_errors, 
-				np.transpose(self.layer_list[index].activations))
+				np.transpose(self.layer_list[index].activations)) #the bias is absent
 
 	def _calc_error(self, y):
 		"""calcs error func wrt y and next layer for all layers"""
@@ -191,25 +190,27 @@ class Network():
 
 def initialize_sigmoid_network(num_units):
 	"""initialize network with all sigmoid activation functions"""
-	return Network(num_units, [act_funcs.Sigmoid()]*(len(num_units)), 1.0)
+	return Network(num_units, [act_funcs.Sigmoid()]*(len(num_units)), 0.001)
 
 
 if __name__ == '__main__':
 		
 	#print [act_funcs.Sigmoid()]*(len(num_units)-1)
 	net = initialize_sigmoid_network([3,2,1])
-	X  = np.array([[3,4,5]])
-	Y = np.array([[1]])
+	X  = np.array([[1,3,4],[6,1,-1],[1,3,4],[6,1,-1]])
+	Y = np.array([[1],[0],[1],[0]])
+	w = net.train_net(X,Y)
+	X2 = np.array([[0,0,0],[1,1,2]])
+	print w 
+	print net.predict(X,w)
+	# with few samples, performance seems highly dependent on random initialization
 
-	net.train_net(X,Y)
+	"""X3 = np.array([[1,3,4],[6,1,-1]])
+	Y3 = np.array([[1],[0]])
+	w3 = net.train_net(X3, Y3)
+	print net.predict(X3, w3)"""
 	
-	#print net.weight_matrices
-	
-	
-	#print net.num_units
-	#print net.layer_list
-	#print net.act_list
-	#print net.__dict__
+		#print net.__dict__
 
 	print "hello"	
 

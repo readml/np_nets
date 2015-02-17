@@ -37,14 +37,21 @@ class Layer():
 		"""calculate the derivative of the activation for this layer"""
 		return self.activation_function.eval_deriv_func(self.activations)
 
-	def calc_error(self, next_layer_acts, weight_matrix):
+	def calc_error(self, next_layer_acts_errors, next_is_last, weight_matrix):
 		"""look at the next layer or outputs to calc the error of the activations"""
 		if self.is_last_layer:
-			self.activation_errors = self.activations - next_layer_acts #should be replaced with proper error func
+			self.activation_errors = self.activations - next_layer_acts_errors #should be replaced with proper error func
 		else:
-			a = np.dot(np.transpose(weight_matrix),next_layer_acts)
+			print weight_matrix
+			print next_layer_acts_errors
+			if not(next_is_last):
+				next_layer_acts_errors = next_layer_acts_errors[:-1] #to get rid of the bias term
+			a = np.dot(np.transpose(weight_matrix),next_layer_acts_errors)
 			b = self.calc_deriv_activation()
 			self.activation_errors = np.multiply(a,b)
+			print self.activation_errors
+			print "then"
+
 		return self.activation_errors
 
 class Network():
@@ -184,19 +191,20 @@ class Network():
 
 	def _calc_error(self, y):
 		"""calcs error func wrt y and next layer for all layers"""
-		self.layer_list[-1].calc_error(y, weight_matrix = None)
+		self.layer_list[-1].calc_error(y, next_is_last = False, weight_matrix = None)
 		for i in range(len(self.layer_list)-2,0,-1): #not the input layer bc range is right exclusive
-			self.layer_list[i].calc_error(self.layer_list[i+1].activations, self.weight_matrices[i])
+			self.layer_list[i].calc_error(self.layer_list[i+1].activation_errors, self.layer_list[i+1].is_last_layer, self.weight_matrices[i])
+			### NOTE: CHANGED NEXT ACTIVATIONS TO NEXT ACTIVATION ERRORS
 
 def initialize_sigmoid_network(num_units):
 	"""initialize network with all sigmoid activation functions"""
-	return Network(num_units, [act_funcs.Sigmoid()]*(len(num_units)), 0.001)
+	return Network(num_units, [act_funcs.Sigmoid()]*(len(num_units)), 0.01)
 
 
 if __name__ == '__main__':
 		
 	#print [act_funcs.Sigmoid()]*(len(num_units)-1)
-	net = initialize_sigmoid_network([3,2,1])
+	net = initialize_sigmoid_network([3,2,2,1])
 	X  = np.array([[1,3,4],[6,1,-1],[1,3,4],[6,1,-1]])
 	Y = np.array([[1],[0],[1],[0]])
 	w = net.train_net(X,Y)

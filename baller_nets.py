@@ -56,30 +56,54 @@ class Network():
 		for num, act in zip(self.num_units[:-1], self.act_list[:-1]):
 			self.layer_list.append(Layer(num, act))		
 		self.layer_list.append(Layer(num_units[-1], act_list[-1], is_last_layer = True))
-		self._init_weights_as_one()
+		self._init_weights_random()
 		self._init_zero_accumulators() #set them to zero
 
-	def _init_weights(self):
+	def _init_weights_random(self):
 		"""initialize network weights in each layer"""
 		self.weight_matrices = []
-		for i in range(len(self.layer_list)-1):
-			self.weight_matrices.append(np.random.rand((self.num_units[i+1], self.num_units[i]+1))) #succeeding layer, current layer with the bias
+		self.shapes_list = []
+		for i in range(len(self.layer_list)-1):			
+			self.weight_matrices.append(np.random.rand(self.num_units[i+1], self.num_units[i]+1)) #succeeding layer, current layer with the bias
+			self.shapes_list.append(np.shape(self.weight_matrices[i]))
 
 	def _init_weights_as_one(self):
 		"""initialize network weights in each layer"""
 		self.weight_matrices = []
+		self.shapes_list = []
 		for i in range(len(self.layer_list)-1):
 			self.weight_matrices.append(np.ones((self.num_units[i+1], self.num_units[i]+1)))
-	
+			self.shapes_list.append(np.shape(self.weight_matrices[i]))
+
 	def _init_zero_accumulators(self):
 		"""initialize network weights in each layer"""
 		self.accumulators = []
 		for i in range(len(self.layer_list)-1):
 			self.accumulators.append(np.zeros((self.num_units[i+1], self.num_units[i]+1))) #succeeding layer, current layer with the bias
 
+	def _unroll_matrices(self, matrices):
+		unrolled = []
+		for matrix in matrices:
+			unrolled = np.hstack([unrolled, np.ravel(matrix)])
+		return unrolled
+
+	def _reform_matrices(self, vector):
+		matrices = []
+		vector_index = 0
+		for rows, columns in self.shapes_list:
+			matrix_size = rows*columns
+			matrices.append(np.reshape(vector[vector_index:vector_index+matrix_size], (rows, columns)))
+			vector_index += matrix_size
+		return matrices
+
 	def train_net(self, X, Y):
 		"""np matrix X of input data and np matrix Y of output data, rows are samples, columns are features"""
-		calc_weight_updates(X, Y)
+		self._init_weights_random
+		init_weights_vector = self._unroll_matrices(self.weight_matrices)
+
+		solution = op.fmin_cg(self.evaluate_cost, init_weights_vector, 
+				fprime = self.calc_error_derivs,maxiter = 400)
+
 
 	def calc_error_derivs(self, X, Y, weight_matrices):
 		"""find the dCost/dweights"""
@@ -107,6 +131,7 @@ class Network():
 		lam = self.lam
 		self.weight_matrices = weight_matrices
 		samples = X.shape[0]
+
 		total_log_cost = 0
 		for i in range(samples):
 			forward_prop(X[i,:])
@@ -114,10 +139,12 @@ class Network():
 			y = Y[i,:]
 			log_cost = y*np.log(hypothesis) + (np.ones(y.shape) - y)*np.log(np.ones(hypothesis.shape) - hypothesis)
 			total_log_cost += np.sum(log_cost)
+		
 		squared_weights = 0
 		for i in range(len(self.weight_matrices)):
 			squared_weights += np.sum((self.weight_matrices[i][:,-1])**2) # don't regularize bias weights
 		reg_term = lam*1.0/(2*samples)*squared_weights
+
 		return -1.0/samples*total_log_cost + reg_term 		
 
 	def forward_prop(self, inputs):
@@ -141,16 +168,17 @@ class Network():
 
 def initialize_sigmoid_network(num_units):
 	"""initialize network with all sigmoid activation functions"""
-	return Network(num_units, [act_funcs.Sigmoid()]*(len(num_units)))
+	return Network(num_units, [act_funcs.Sigmoid()]*(len(num_units)), 1.0)
 
 
 if __name__ == '__main__':
-	
+		
 	#print [act_funcs.Sigmoid()]*(len(num_units)-1)
 	net = initialize_sigmoid_network([3,2,1])
+	
 	#print net.weight_matrices
-	net.forward_prop([1,1,1])
-	print net.layer_list[-1].activations
+	
+	
 	#print net.num_units
 	#print net.layer_list
 	#print net.act_list

@@ -42,16 +42,11 @@ class Layer():
 		if self.is_last_layer:
 			self.activation_errors = self.activations - next_layer_acts_errors #should be replaced with proper error func
 		else:
-		#	print weight_matrix
-		#	print next_layer_acts_errors
 			if not(next_is_last):
 				next_layer_acts_errors = next_layer_acts_errors[:-1] #to get rid of the bias term
 			a = np.dot(np.transpose(weight_matrix),next_layer_acts_errors)
 			b = self.calc_deriv_activation()
 			self.activation_errors = np.multiply(a,b)
-		#	print self.activation_errors
-		#	print "then"
-
 		return self.activation_errors
 
 class Network():
@@ -196,6 +191,30 @@ class Network():
 			self.layer_list[i].calc_error(self.layer_list[i+1].activation_errors, self.layer_list[i+1].is_last_layer, self.weight_matrices[i])
 			### NOTE: CHANGED NEXT ACTIVATIONS TO NEXT ACTIVATION ERRORS
 
+	def gradient_check(self):
+		"""numerically estimates gradient and prints for user to check against backprop"""
+		
+		self._init_weights_random()
+		weights_vector = self._unroll_matrices(self.weight_matrices)
+		numerical_sol = self.estimate_gradient(weights_vector)
+		backprop_sol = self.calc_error_derivs(weights_vector)
+
+		return numerical_sol, backprop_sol, np.mean(np.abs(numerical_sol-backprop_sol))
+
+	def estimate_gradient(self,weights_vector):
+		epsilon = 10e-4
+		grad_approx = np.empty( weights_vector.shape)
+		for i in xrange(len(weights_vector)):
+			larger_theta = np.empty(weights_vector.shape)
+			smaller_theta = np.empty(weights_vector.shape)
+			np.copyto(larger_theta,weights_vector)
+			np.copyto(smaller_theta,weights_vector)
+			larger_theta[i] += epsilon
+			smaller_theta[i] += -epsilon
+			grad_approx[i] = (self.evaluate_cost(larger_theta) - self.evaluate_cost(smaller_theta) )/(2.0*epsilon)
+		return grad_approx
+
+
 def initialize_sigmoid_network(num_units):
 	"""initialize network with all sigmoid activation functions"""
 	return Network(num_units, [act_funcs.Sigmoid()]*(len(num_units)), 0.01)
@@ -205,7 +224,7 @@ if __name__ == '__main__':
 		
 	#print [act_funcs.Sigmoid()]*(len(num_units)-1)
 	net = initialize_sigmoid_network([3,2,2,1])
-	X  = np.array([[1,3,4],[6,1,-1],[1,3,4],[6,1,-1]])
+	X  = np.array([[1,3,4],[6,1,-1],[1,3,3],[6,1,0]])
 	Y = np.array([[1],[0],[1],[0]])
 	#print net.weight_matrices
 	#print net.predict(X,net.weight_matrices)
@@ -213,7 +232,10 @@ if __name__ == '__main__':
 	#print "updated weights:"
 	#print w 
 	print net.predict(X,w)
-
+	a, b, c = net.gradient_check()
+	print a
+	print b 
+	print c 
 	#X2 = np.array([[0,0,0],[1,1,2]])
 	
 	# with few samples, performance seems highly dependent on random initialization

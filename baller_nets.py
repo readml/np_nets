@@ -1,5 +1,6 @@
 import numpy as np
 import baller_act_fcns as act_funcs
+import scipy.io
 from scipy.optimize import fmin_cg
 
 
@@ -105,7 +106,7 @@ class Network():
 		self._init_weights_random
 		init_weights_vector = self._unroll_matrices(self.weight_matrices)
 		solution = fmin_cg(self.evaluate_cost, init_weights_vector, 
-				fprime = self.calc_error_derivs, maxiter = 400)
+				fprime = self.calc_error_derivs, maxiter = 40)
 		return solution
 
 	def predict(self, X, weights_vector):
@@ -116,7 +117,9 @@ class Network():
 		Y = np.zeros((samples, len(self.layer_list[-1].activations)))
 		for i in range(samples):
 			self.forward_prop(X[i,:])
-			Y[i] = self.layer_list[-1].activations
+			#print self.layer_list[-1].activations
+			#print self.layer_list[-1].activations[:,0]
+			Y[i] = self.layer_list[-1].activations[:,0]
 
 		return Y
 
@@ -215,15 +218,43 @@ class Network():
 		return grad_approx
 
 
-def initialize_sigmoid_network(num_units):
+def load_coursera_data_file():
+	data = scipy.io.loadmat("ex3data1.mat")
+	y = data['y']
+	X = data['X']
+	all_data = np.hstack([y,X])
+	np.random.shuffle(all_data) #randomly shuffle data so test and training sets will see all examples
+	num_examples = all_data.shape[0]
+	
+	split_set_index = 30
+	training_y = all_data[:split_set_index,0:1]
+	training_X = all_data[:split_set_index,1:]
+	training_set = { 'y':training_y,'X':training_X }
+	test_y = all_data[split_set_index:60,0:1]
+	test_X = all_data[split_set_index:60,1:]
+	test_set = { 'y':test_y,'X':test_X }
+	return training_X, test_X, training_y, test_y
+
+def initialize_sigmoid_network(num_units, lam):
 	"""initialize network with all sigmoid activation functions"""
-	return Network(num_units, [act_funcs.Sigmoid()]*(len(num_units)), 0.01)
+	return Network(num_units, [act_funcs.Sigmoid()]*(len(num_units)), lam)
+
+def run_MNIST():
+	X_train, X_test, Y_train, Y_test = load_coursera_data_file()
+	net_m = initialize_sigmoid_network([400,25,10], 0.1)
+	sol = net_m.train_net(X_train, Y_train)
+	print sol
+	pred = net_m.predict(X_test, sol)
+	print pred
+	print Y_test
+
 
 
 if __name__ == '__main__':
 		
 	#print [act_funcs.Sigmoid()]*(len(num_units)-1)
-	net = initialize_sigmoid_network([3,2,2,1])
+	run_MNIST()
+	"""net = initialize_sigmoid_network([3,2,2,1], lam = 0.01)
 	X  = np.array([[1,3,4],[6,1,-1],[1,3,3],[6,1,0]])
 	Y = np.array([[1],[0],[1],[0]])
 	#print net.weight_matrices
@@ -235,7 +266,7 @@ if __name__ == '__main__':
 	a, b, c = net.gradient_check()
 	print a
 	print b 
-	print c 
+	print c """
 	#X2 = np.array([[0,0,0],[1,1,2]])
 	
 	# with few samples, performance seems highly dependent on random initialization

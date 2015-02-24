@@ -42,11 +42,18 @@ class Layer():
 		"""look at the next layer or outputs to calc the error of the activations"""
 		if self.is_last_layer:
 			self.activation_errors = self.activations - next_layer_acts_errors #should be replaced with proper error func
+			"""y = next_layer_acts_errors
+			hypothesis = self.activations
+			log_cost = np.divide(y,hypothesis) - np.divide((np.ones(y.shape) - y),np.ones(hypothesis.shape) - hypothesis)
+			log_cost *= -1
+			self.activation_errors = log_cost
+			"""
 		else:
 			if not(next_is_last):
 				next_layer_acts_errors = next_layer_acts_errors[:-1] #to get rid of the bias term
 			a = np.dot(np.transpose(weight_matrix),next_layer_acts_errors)
-			b = self.calc_deriv_activation()
+			#b = self.calc_deriv_activation()
+			b = (self.activations * (1-self.activations)) #should be equivalent
 			self.activation_errors = np.multiply(a,b)
 		return self.activation_errors
 
@@ -62,6 +69,7 @@ class Network():
 		self._init_weights_random()
 		self._init_zero_accumulators() #set them to zero
 
+	# these fcns could be generalized?
 	def _init_weights_random(self):
 		"""initialize network weights in each layer"""
 		self.weight_matrices = []
@@ -76,6 +84,14 @@ class Network():
 		self.shapes_list = []
 		for i in range(len(self.layer_list)-1):
 			self.weight_matrices.append(np.ones((self.num_units[i+1], self.num_units[i]+1)))
+			self.shapes_list.append(np.shape(self.weight_matrices[i]))
+	
+	def _init_weights_as_zero(self):
+		"""initialize network weights in each layer as zero for testing purposes"""
+		self.weight_matrices = []
+		self.shapes_list = []
+		for i in range(len(self.layer_list)-1):
+			self.weight_matrices.append(np.zeros((self.num_units[i+1], self.num_units[i]+1)))
 			self.shapes_list.append(np.shape(self.weight_matrices[i]))
 
 	def _init_zero_accumulators(self):
@@ -103,10 +119,10 @@ class Network():
 		"""np matrix X of input data and np matrix Y of output data, rows are samples, columns are features"""
 		self.X = X
 		self.Y = Y
-		self._init_weights_random
+		self._init_weights_random()
 		init_weights_vector = self._unroll_matrices(self.weight_matrices)
 		solution = fmin_cg(self.evaluate_cost, init_weights_vector, 
-				fprime = self.calc_error_derivs, maxiter = 40)
+				fprime = self.calc_error_derivs, maxiter = 200)
 		return solution
 
 	def predict(self, X, weights_vector):
@@ -117,8 +133,6 @@ class Network():
 		Y = np.zeros((samples, len(self.layer_list[-1].activations)))
 		for i in range(samples):
 			self.forward_prop(X[i,:])
-			#print self.layer_list[-1].activations
-			#print self.layer_list[-1].activations[:,0]
 			Y[i] = self.layer_list[-1].activations[:,0]
 
 		return Y
@@ -132,16 +146,18 @@ class Network():
 		self._init_zero_accumulators() #set them to zero
 		samples = X.shape[0]
 		for i in range(samples):
-			self.forward_prop(X[i,:])
-			self.back_prop(Y[i,:])
+			self.forward_prop(X[i,:]) #propagate the activations
+			self.back_prop(Y[i,:]) #compute activation errors
 
 		# error_derivs is the list of matrix derivatives of cost fcn wrt the weight matrices
 		error_derivs = []
 		for W in self.weight_matrices:
-			error_derivs.append(lam*W) # the regularization
+			error_derivs.append(lam*W) # initialize with the regularization term
 
 		for i in range(len(error_derivs)):
-			error_derivs[i][:,-1] = np.zeros((error_derivs[i].shape[0],))
+			#zero the bias term to eliminate regularization for it
+			error_derivs[i][:,-1] = np.zeros((error_derivs[i].shape[0],)) 
+			#then add the result of the accumulators, from backprop
 			error_derivs[i] += self.accumulators[i]/float(samples)
 
 		return self._unroll_matrices(error_derivs)
@@ -152,6 +168,7 @@ class Network():
 		Y = self.Y
 		lam = self.lam
 		self.weight_matrices = self._reform_matrices(weights_vector)
+		# get the matrices back, this is dependent on the shapes of the matrices stored
 		samples = X.shape[0]
 
 		total_log_cost = 0
@@ -159,26 +176,35 @@ class Network():
 			self.forward_prop(X[i,:])
 			hypothesis = self.layer_list[-1].activations 
 			y = Y[i,:]
+			# cost fcn is correct
 			log_cost = y*np.log(hypothesis) + (np.ones(y.shape) - y)*np.log(np.ones(hypothesis.shape) - hypothesis)
-			total_log_cost += np.sum(log_cost)
+			total_log_cost += np.sum(log_cost) #sign is correct (negated below)
 		
+		sq_cost = 0
+		for i in range(samples):
+			self.forward_prop(X[i,:])
+			hypothesis = self.layer_list[-1].activations 
+			y = Y[i,:]
+			sq_cost += np.sum(0.5*(y-hypothesis)**2)
+
 		squared_weights = 0
 		for i in range(len(self.weight_matrices)):
 			squared_weights += np.sum((self.weight_matrices[i][:,-1])**2) # don't regularize bias weights
 		reg_term = lam*1.0/(2*samples)*squared_weights
 
+		#return sq_cost/samples + reg_term
 		return -1.0/samples*total_log_cost + reg_term 		
 
 	def forward_prop(self, inputs):
 		"""run forward prop"""
 		assert len(inputs) == self.num_units[0]
-		self.layer_list[0].activations[:-1] = np.expand_dims(inputs, 1) #preserves bias as -1	
-		for i in range(1,len(self.layer_list)):
+		self.layer_list[0].activations[:-1] = np.expand_dims(inputs, 1) #set input layer, preserve bias as -1	
+		for i in range(1,len(self.layer_list)): #exclude the 
 			self.layer_list[i].calculate_activations(self.layer_list[i-1].activations, 
 				self.weight_matrices[i-1])			
 
 	def back_prop(self, y):
-		"""run back prop"""
+		"""run back prop, finding values for the accumulators"""
 		self._calc_error(y)
 		for i in range(len(self.accumulators)-1):
 			self.accumulators[i] += np.dot(self.layer_list[i+1].activation_errors[:-1], 
@@ -195,8 +221,7 @@ class Network():
 			### NOTE: CHANGED NEXT ACTIVATIONS TO NEXT ACTIVATION ERRORS
 
 	def gradient_check(self):
-		"""numerically estimates gradient and prints for user to check against backprop"""
-		
+		"""numerically estimates gradient and prints for user to check against backprop"""		
 		self._init_weights_random()
 		weights_vector = self._unroll_matrices(self.weight_matrices)
 		numerical_sol = self.estimate_gradient(weights_vector)
@@ -230,8 +255,8 @@ def load_coursera_data_file():
 	training_y = all_data[:split_set_index,0:1]
 	training_X = all_data[:split_set_index,1:]
 	training_set = { 'y':training_y,'X':training_X }
-	test_y = all_data[split_set_index:60,0:1]
-	test_X = all_data[split_set_index:60,1:]
+	test_y = all_data[split_set_index:40,0:1]
+	test_X = all_data[split_set_index:40,1:]
 	test_set = { 'y':test_y,'X':test_X }
 	return training_X, test_X, training_y, test_y
 
@@ -241,32 +266,33 @@ def initialize_sigmoid_network(num_units, lam):
 
 def run_MNIST():
 	X_train, X_test, Y_train, Y_test = load_coursera_data_file()
-	net_m = initialize_sigmoid_network([400,25,10], 0.1)
+	net_m = initialize_sigmoid_network([400,10], 0.1)
 	sol = net_m.train_net(X_train, Y_train)
 	print sol
 	pred = net_m.predict(X_test, sol)
 	print pred
 	print Y_test
 
-
-
 if __name__ == '__main__':
 		
 	#print [act_funcs.Sigmoid()]*(len(num_units)-1)
-	run_MNIST()
-	"""net = initialize_sigmoid_network([3,2,2,1], lam = 0.01)
+
+	#run_MNIST()
+	net = initialize_sigmoid_network([3,2,2,1], lam = 0.00)
 	X  = np.array([[1,3,4],[6,1,-1],[1,3,3],[6,1,0]])
 	Y = np.array([[1],[0],[1],[0]])
 	#print net.weight_matrices
 	#print net.predict(X,net.weight_matrices)
-	w = net.train_net(X,Y)
+	#w = net.train_net(X,Y)
 	#print "updated weights:"
 	#print w 
-	print net.predict(X,w)
+	#print net.predict(X,w)
+	net.X = X
+	net.Y = Y
 	a, b, c = net.gradient_check()
-	print a
-	print b 
-	print c """
+	print zip(a,b)
+	
+	print c 
 	#X2 = np.array([[0,0,0],[1,1,2]])
 	
 	# with few samples, performance seems highly dependent on random initialization
